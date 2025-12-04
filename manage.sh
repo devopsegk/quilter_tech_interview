@@ -38,13 +38,20 @@ case $COMMAND in
         echo "Kind does not exist and must be installed first."
         echo "This is your architecture:"
         uname -a
-        echo "Please install Kind according to your architecture, then repeat this command again"
+        echo "Please install Kind according to your architecture, then repeat this command again."
     fi
     ;;
 
   teardown-cluster)
-    echo "Tearing down Kind cluster: $CLUSTER_NAME"
-    kind delete cluster --name $CLUSTER_NAME
+    if command -v kind &> /dev/null; then
+        echo "Tearing down Kind cluster: $CLUSTER_NAME"
+        kind delete cluster --name $CLUSTER_NAME
+    else
+        echo "Kind does not exist and must be installed first."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please install Kind according to your architecture, then repeat this command again."
+    fi
     ;;
 
   build)
@@ -53,9 +60,16 @@ case $COMMAND in
       usage
     fi
     VERSION=$1
-    echo "Building Docker image: $DOCKER_IMAGE:$VERSION"
-    docker build -t $DOCKER_IMAGE:$VERSION .
-    kind load docker-image $DOCKER_IMAGE:$VERSION --name $CLUSTER_NAME
+    if command -v docker && command -v kind &> /dev/null; then
+        echo "Building Docker image: $DOCKER_IMAGE:$VERSION"
+        docker build -t $DOCKER_IMAGE:$VERSION .
+        kind load docker-image $DOCKER_IMAGE:$VERSION --name $CLUSTER_NAME
+    else
+        echo "Ensure that Docker and Kind are installed in your system."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please ensure that Docker and Kind are installed according to your architecture."
+    fi
     ;;
 
   deploy)
@@ -64,33 +78,61 @@ case $COMMAND in
       usage
     fi
     VERSION=$1
-    $0 build $VERSION  # Build if not already
-    echo "Deploying version $VERSION via Terraform"
-    cd terraform
-    terraform init
-    terraform apply -auto-approve -var "app_version=$VERSION"
-    cd ..
+    if command -v terraform &> /dev/null; then
+        $0 build $VERSION  # Build if not already
+        echo "Deploying version $VERSION via Terraform"
+        cd terraform
+        terraform init
+        terraform apply -auto-approve -var "app_version=$VERSION"
+        cd ..
+    else
+        echo "Terraform does not exist and must be installed first."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please install Terraform according to your architecture, then repeat this command again."
+    fi
     ;;
 
   access-url)
-    echo "Port-forwarding service to http://localhost:8080"
-    echo "Access /healthz or /version at http://localhost:8080/<endpoint>"
-    echo "Ctrl+C to stop"
-    kubectl -n $NAMESPACE port-forward svc/$APP_NAME 8080:80
+    if command -v kubectl &> /dev/null; then
+        echo "Port-forwarding service to http://localhost:8080"
+        echo "Access /healthz or /version at http://localhost:8080/<endpoint>"
+        echo "Ctrl+C to stop"
+        kubectl -n $NAMESPACE port-forward svc/$APP_NAME 8080:80
+    else
+        echo "Kubectl does not exist and must be installed first."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please install Kubectl according to your architecture, then repeat this command again"
+    fi
     ;;
 
   logs)
-    POD=$(kubectl -n $NAMESPACE get pods -l app=$APP_NAME -o jsonpath="{.items[0].metadata.name}")
-    if [ -z "$POD" ]; then
-      echo "No pods found"
-      exit 1
+    if command -v kubectl &> /dev/null; then
+        POD=$(kubectl -n $NAMESPACE get pods -l app=$APP_NAME -o jsonpath="{.items[0].metadata.name}")
+        if [ -z "$POD" ]; then
+            echo "No pods found"
+            exit 1
+        fi
+        kubectl -n $NAMESPACE logs -f $POD
+    else
+        echo "Kubectl does not exist and must be installed first."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please install Kubectl according to your architecture, then repeat this command again."
     fi
-    kubectl -n $NAMESPACE logs -f $POD
     ;;
 
   versions)
-    kubectl -n $NAMESPACE get deployments $APP_NAME -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="APP_VERSION")].value}'
-    echo ""  # Newline for readability
+    if command -v kubectl &> /dev/null; then
+        kubectl -n $NAMESPACE get deployments $APP_NAME -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="APP_VERSION")].value}'
+        echo ""  # Newline for readability
+    else
+        echo "Kubectl does not exist and must be installed first."
+        echo "This is your architecture:"
+        uname -a
+        echo "Please install Kubectl according to your architecture, then repeat this command again."
+    fi
     ;;
 
   *)
